@@ -155,7 +155,7 @@ class TradingEnv(BaseEnv):
         return np.array([self.action_space.sample()])
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
-        assert isinstance(action, np.ndarray), type(action)
+        # assert isinstance(action, np.ndarray), type(action)
         if action.shape == (1, ):
             action = action.item()  # 0-dim array
 
@@ -172,7 +172,7 @@ class TradingEnv(BaseEnv):
 
         if trade:
             self._last_trade_tick = self._current_tick
-
+ 
         self._position_history.append(self._position)
         self._profit_history.append(float(np.exp(self._total_reward)))
         observation = self._get_observation()
@@ -192,44 +192,130 @@ class TradingEnv(BaseEnv):
 
     def _get_observation(self) -> np.ndarray:
         obs = to_ndarray(self.signal_features[(self._current_tick - self.window_size + 1):self._current_tick + 1]
-                         ).reshape(-1).astype(np.float32)
+                         ).astype(np.float32)#.reshape(-1).astype(np.float32)
 
-        tick = (self._current_tick - self._last_trade_tick) / self._cfg.eps_length
-        obs = np.hstack([obs, to_ndarray([self._position.value]), to_ndarray([tick])]).astype(np.float32)
+        # tick = (self._current_tick - self._last_trade_tick) / self._cfg.eps_length
+        # obs = np.hstack([obs, to_ndarray([self._position.value]), to_ndarray([tick])]).astype(np.float32)
         return obs
 
-    def render(self) -> None:
-        import matplotlib.pyplot as plt
-        plt.clf()
-        plt.xlabel('trading days')
-        plt.ylabel('profit')
-        plt.plot(self._profit_history)
-        plt.savefig(self.save_path + str(self._env_id) + "-profit.png")
+    def render(self,render_mode):
+      import matplotlib.pyplot as plt
 
-        plt.clf()
-        plt.xlabel('trading days')
-        plt.ylabel('close price')
-        window_ticks = np.arange(len(self._position_history))
-        eps_price = self.raw_prices[self._start_tick:self._end_tick + 1]
-        plt.plot(eps_price)
+      plt.figure(figsize=(12, 4),dpi=800)
 
-        short_ticks = []
-        long_ticks = []
-        flat_ticks = []
-        for i, tick in enumerate(window_ticks):
-            if self._position_history[i] == Positions.SHORT:
-                short_ticks.append(tick)
-            elif self._position_history[i] == Positions.LONG:
-                long_ticks.append(tick)
-            else:
-                flat_ticks.append(tick)
+
+      # plt.clf()
+      # plt.xlabel('trading days')
+      # plt.ylabel('profit')
+      # plt.plot(self._profit_history)
+      # plt.title(f'Profit {self.save_path.split("/")[-1][:-1]}')
+
+      # plt.savefig(self.save_path + str(self._env_id) + "-profit.png")
+
+      plt.clf()
+      plt.xlabel('Días')
+      plt.ylabel('Precio de Cierre Ajustado')
+      window_ticks = np.arange(len(self._position_history))
+      # print('start tick:',self._start_tick)
+      # print('end tick:',self._end_tick)
+      eps_price = self.raw_prices[self._start_tick:self._end_tick + 1]
+      eps_price = self.raw_prices[0:self._end_tick + 1]
+      plt.plot(self.raw_prices[0:self._end_tick + 1])
+
+      short_ticks = []
+      long_ticks = []
+      flat_ticks = []
+      for i, tick in enumerate(window_ticks):
+          if self._position_history[i] == Positions.SHORT:
+              short_ticks.append(tick)
+          elif self._position_history[i] == Positions.LONG:
+              long_ticks.append(tick)
+          else:
+              flat_ticks.append(tick)
+      
+      long_ticks = [lt + self.window_size - 1 for lt in long_ticks]
+      flat_ticks = [ft + self.window_size - 1 for ft in flat_ticks]
+      short_ticks = [st + self.window_size - 1 for st in short_ticks]
+
+      # print(len(eps_price))
+      # print((eps_price))
+      # print('max',max(short_ticks))
+      # print((short_ticks))
+      # print(len(self._position_history))
+      # print((self._position_history))
+      if render_mode =='random':
+        plt.title(f'Trades {self.save_path.split("/")[-1][:-1]} con modelo RL no entrenado')
 
         plt.plot(long_ticks, eps_price[long_ticks], 'g^', markersize=3, label="Long")
         plt.plot(flat_ticks, eps_price[flat_ticks], 'bo', markersize=3, label="Flat")
         plt.plot(short_ticks, eps_price[short_ticks], 'rv', markersize=3, label="Short")
         plt.legend(loc='upper left', bbox_to_anchor=(0.05, 0.95))
-        plt.savefig(self.save_path + str(self._env_id) + '-price.png')
+        plt.savefig('Graficos/graficos del modelo/'+ str(self._env_id)+ f'_{self.save_path.split("/")[-1][:-1]}_no_entrenado'  + '.png')
+      
+      elif render_mode == 'trained':
+        plt.title(f'Trades {self.save_path.split("/")[-1][:-1]} con modelo RL entrenado')
+        plt.plot(long_ticks, eps_price[long_ticks], 'g^', markersize=3, label="Long")
+        plt.plot(flat_ticks, eps_price[flat_ticks], 'bo', markersize=3, label="Flat")
+        plt.plot(short_ticks, eps_price[short_ticks], 'rv', markersize=3, label="Short")
+        plt.legend(loc='upper left', bbox_to_anchor=(0.05, 0.95))
+        plt.savefig('Graficos/graficos del modelo/'+ str(self._env_id)+ f'_{self.save_path.split("/")[-1][:-1]}'  + '.png')
 
+      # plt.show()
+      plt.figure().clear()
+      plt.close('all')
+      plt.cla()
+      plt.clf()
+      
+
+      fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 10), dpi=800)
+
+      ax1.set_xlabel('Días')
+      ax1.set_ylabel('Precio de Cierre Ajustado')
+      ax1.set_title(f'Trades {self.save_path.split("/")[-1][:-1]} con modelo RL')
+      window_ticks = np.arange(len(self._position_history))
+      eps_price = self.raw_prices[0:self._end_tick + 1]
+      ax1.plot(self.raw_prices[0:self._end_tick + 1])
+
+      short_ticks = []
+      long_ticks = []
+      flat_ticks = []
+      for i, tick in enumerate(window_ticks):
+          if self._position_history[i] == Positions.SHORT:
+              short_ticks.append(tick)
+          elif self._position_history[i] == Positions.LONG:
+              long_ticks.append(tick)
+          else:
+              flat_ticks.append(tick)
+
+      long_ticks = [lt + self.window_size - 1 for lt in long_ticks]
+      flat_ticks = [ft + self.window_size - 1 for ft in flat_ticks]
+      short_ticks = [st + self.window_size - 1 for st in short_ticks]
+
+      ax1.plot(long_ticks, eps_price[long_ticks], 'g^', markersize=3, label="Long")
+      ax1.plot(flat_ticks, eps_price[flat_ticks], 'bo', markersize=3, label="Flat")
+      ax1.plot(short_ticks, eps_price[short_ticks], 'rv', markersize=3, label="Short")
+      ax1.legend(loc='upper left', bbox_to_anchor=(0.05, 0.95))
+
+      ax2.set_xlabel('trading days')
+      ax2.set_ylabel('rentabilidad')
+      tmp_list = [1] *30
+      tmp_list.extend(self._profit_history)
+      tmp_rentabilidad = [(r-1)*100 for r in tmp_list]
+      ax2.plot(list(range(len(self._profit_history)+30)), tmp_rentabilidad)
+      ax2.set_title(f'Rentabilidad {self.save_path.split("/")[-1][:-1]}')
+
+      # Guardar la figura
+      fig.savefig(self.save_path + str(self._env_id) + '-combined.png')
+
+      # Limpiar figuras para liberar memoria
+      plt.figure().clear()
+      plt.close('all')
+      plt.cla()
+      plt.clf()
+
+      return short_ticks, long_ticks, flat_ticks
+
+      
     def close(self):
         import matplotlib.pyplot as plt
         plt.close()

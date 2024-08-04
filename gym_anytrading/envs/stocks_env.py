@@ -17,7 +17,7 @@ class StocksEnv(TradingEnv):
 
         # ====== load Google stocks data =======
         raw_data = load_dataset(self._cfg.stocks_data_filename, 'Date')
-        self.raw_prices = raw_data.loc[:, 'Close'].to_numpy()
+        self.raw_prices = raw_data.loc[:, 'Adj Close'].to_numpy()
         EPS = 1e-10
         self.df = deepcopy(raw_data)
         if self.train_range == None or self.test_range == None:
@@ -52,17 +52,17 @@ class StocksEnv(TradingEnv):
         '''
 
         # ====== build feature map ========
-        all_feature_name = ['Close', 'Open', 'High', 'Low', 'Adj Close', 'Volume']
+        all_feature_name = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume', 'rsi', 'macd','macd_signal', 'bb_bbu', 'bb_bbl', 'obv']
         all_feature = {k: self.df.loc[:, k].to_numpy() for k in all_feature_name}
         # add feature "Diff"
-        prices = self.df.loc[:, 'Close'].to_numpy()
+        prices = self.df.loc[:, 'Adj Close'].to_numpy()
         diff = np.insert(np.diff(prices), 0, 0)
         all_feature_name.append('Diff')
         all_feature['Diff'] = diff
         # =================================
 
         # you can select features you want
-        selected_feature_name = ['Close', 'Diff', 'Volume']
+        selected_feature_name = ['Adj Close','rsi','Volume','macd','macd_signal','bb_bbu','bb_bbl','obv']
         selected_feature = np.column_stack([all_feature[k] for k in selected_feature_name])
         feature_dim_len = len(selected_feature_name)
 
@@ -95,18 +95,33 @@ class StocksEnv(TradingEnv):
         last_trade_price = (self.raw_prices[self._last_trade_tick])
         ratio = current_price / last_trade_price
         cost = np.log((1 - self.trade_fee_ask_percent) * (1 - self.trade_fee_bid_percent))
+        # if ratio >= 2:
+        #     print('Last Trade Date:', self.df.index[self._last_trade_tick], 'PRICE:', last_trade_price)
+        #     print('Current Trade Date:', self.df.index[self._current_tick], 'PRICE:', current_price)
+        #     print('VALOR DE COSTO:', cost)
+        #     print('VALOR DE RATIO:', ratio)
 
         if action == Actions.BUY and self._position == Positions.SHORT:
-            step_reward = np.log(2 - ratio) + cost
+            if ratio >= 2:
+                step_reward = -0.1
+                print('Ratio:', ratio)
+            else:
+                step_reward = np.log(2 - ratio) + cost
 
         if action == Actions.SELL and self._position == Positions.LONG:
             step_reward = np.log(ratio) + cost
+            # print('Action:', action)
 
         if action == Actions.DOUBLE_SELL and self._position == Positions.LONG:
+            # print('Action:', action)
             step_reward = np.log(ratio) + cost
 
         if action == Actions.DOUBLE_BUY and self._position == Positions.SHORT:
-            step_reward = np.log(2 - ratio) + cost
+            if ratio >= 2:
+                step_reward = -0.1
+                print('Ratio:', ratio)
+            else:
+                step_reward = np.log(2 - ratio) + cost
 
         step_reward = float(step_reward)
 
